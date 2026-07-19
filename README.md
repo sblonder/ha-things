@@ -1,0 +1,131 @@
+# HA Things
+
+A collection of custom Home Assistant Lovelace elements, bundled together and
+distributed as a single HACS resource (`ha-things.js`).
+
+## Elements
+
+- [**Climate Defaults Tile Card**](#climate-defaults-tile-card) — a Tile card for
+  climate entities that applies a configured default hvac mode/temperature/fan
+  mode automatically when the entity is turned on.
+
+More elements can be added over time; see [Repository structure](#repository-structure).
+
+## Installation
+
+### HACS (recommended)
+
+1. In Home Assistant, open **HACS**.
+2. Click the **⋮** menu (top right) → **Custom repositories**.
+3. Add:
+   - **Repository**: `https://github.com/sblonder/ha-things`
+   - **Type**: `Dashboard`
+4. Find **HA Things** in HACS (search for it if it doesn't appear immediately) and
+   click **Download**.
+5. Home Assistant should prompt you to add the resource automatically. If it
+   doesn't, go to **Settings → Dashboards → ⋮ → Resources** and confirm
+   `/hacsfiles/ha-things/ha-things.js` is listed as a **JavaScript Module**. Add it
+   manually if it's missing.
+6. Reload the browser tab (hard refresh, e.g. Ctrl/Cmd+Shift+R) so it picks up the
+   new resource.
+7. Add a card with `type: custom:climate-defaults-tile-card` (see below), either
+   via YAML or by searching for "Climate Defaults Tile Card" in the card picker.
+
+### Manual (no HACS)
+
+1. Download `ha-things.js` from the [Releases](../../releases) page.
+2. Copy it into `config/www/`.
+3. In **Settings → Dashboards → Resources**, add `/local/ha-things.js` as a
+   resource of type **JavaScript Module**.
+
+---
+
+## Climate Defaults Tile Card
+
+Looks and behaves exactly like the built-in **Tile** card, with one addition: you
+can configure the hvac mode, temperature, and fan mode that should be applied
+automatically the instant the climate entity is switched on from the card.
+
+It works by subclassing HA's own running `hui-tile-card` element at runtime, so
+everything you already know about the stock Tile card (icon, name, state text,
+color, feature rows, tap/hold/double-tap actions, `vertical`, etc.) works exactly
+the same. Nothing about the rendering or styling is reimplemented.
+
+### Configuration
+
+```yaml
+type: custom:climate-defaults-tile-card
+entity: climate.living_room
+default_hvac_mode: cool
+default_temperature: 21
+default_fan_mode: auto
+```
+
+| Name                  | Type   | Description                                                    |
+| --------------------- | ------ | ---------------------------------------------------------------|
+| `entity`              | string | **Required.** A `climate.*` entity.                            |
+| `default_hvac_mode`   | string | HVAC mode to set when the entity is turned on from this card.  |
+| `default_temperature` | number | Target temperature to set when the entity is turned on.        |
+| `default_fan_mode`    | string | Fan mode to set when the entity is turned on.                  |
+
+All other [Tile card options](https://www.home-assistant.io/dashboards/tile/) are
+supported unchanged (`name`, `icon`, `color`, `features`, `tap_action`, etc.).
+
+The card's icon defaults to a toggle action for climate entities (the stock Tile
+card doesn't offer this, since `climate` isn't turned on/off as simply as a
+switch or light). Tapping the icon while the entity is off calls `climate.turn_on`
+and then applies your configured defaults; tapping while on turns it off, same as
+the stock card.
+
+You can also add this card via the UI card picker — the visual editor is the same
+one used by the stock Tile card, with an extra "Defaults applied on turn-on"
+section for climate entities.
+
+### Limitations
+
+- This card subclasses Home Assistant's built-in `hui-tile-card` and
+  `hui-tile-card-editor` elements at runtime (there's no published package that
+  exports them, since they're internal to the frontend bundle). This gives exact
+  visual/behavioral parity with the stock card, but ties the card to HA's current
+  internal method names. A future frontend refactor could break it; if that
+  happens you'll see a clear console error rather than a silent failure.
+- After turning the entity on, the configured defaults are applied with sequential,
+  awaited service calls (`set_hvac_mode`/`set_temperature` then `set_fan_mode`) and
+  no artificial delay. This is correct for the vast majority of climate
+  integrations; if yours needs a brief settle time after `turn_on` before it will
+  accept further changes, you may occasionally see the first follow-up call
+  ignored.
+
+---
+
+## Repository structure
+
+```
+src/
+├── ha-things.ts                              # entry point — imports every element below;
+│                                               # this is what gets bundled into dist/ha-things.js
+└── cards/
+    └── climate-defaults-tile-card/
+        ├── climate-defaults-tile-card.ts
+        ├── climate-defaults-tile-card-editor.ts
+        └── types.ts
+```
+
+Everything is built into **one** file (`dist/ha-things.js`) so the whole
+collection is a single HACS resource — HACS's "plugin/dashboard" repository type
+only tracks one asset per repo. To add a new element:
+
+1. Create a new folder under `src/cards/<your-card-name>/` with its own
+   `.ts`/`types.ts` files, following the same self-registering pattern as
+   `climate-defaults-tile-card` (define the custom element, push an entry to
+   `window.customCards`).
+2. Add one import line for it to `src/ha-things.ts`.
+3. Rebuild — it now ships as part of `ha-things.js`.
+
+## Development
+
+```sh
+npm install
+npm run build   # outputs dist/ha-things.js
+npm run watch   # rebuild on change
+```
