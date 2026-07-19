@@ -1,5 +1,6 @@
-import { html } from "lit";
+import { css, html } from "lit";
 import { state } from "lit/decorators.js";
+import { mdiTuneVariant } from "@mdi/js";
 import { fireEvent, type HomeAssistant } from "custom-card-helpers";
 import {
   BASE_EDITOR_TAG,
@@ -28,6 +29,7 @@ interface HuiTileCardEditorInstance extends HTMLElement {
 
 interface HuiTileCardEditorConstructor {
   new (): HuiTileCardEditorInstance;
+  styles?: unknown;
 }
 
 let builtEditorClass: HuiTileCardEditorConstructor | undefined;
@@ -140,8 +142,10 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
 
       return html`
         ${base}
-        <ha-expansion-panel header="Defaults applied on turn-on" outlined>
-          <div style="padding: 12px;">
+        <ha-expansion-panel class="defaults-panel" outlined>
+          <ha-svg-icon slot="leading-icon" .path=${mdiTuneVariant}></ha-svg-icon>
+          <h3 slot="header">Default values</h3>
+          <div class="content">
             <ha-form
               .hass=${this.hass}
               .data=${this._customValues}
@@ -152,6 +156,22 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
           </div>
         </ha-expansion-panel>
       `;
+    }
+
+    // The base editor's own styles (configElementStyle + its own `ha-form { margin-bottom:
+    // 24px }` rule) already give ha-expansion-panel/.content their look; we only need to
+    // add the same 24px gap above our own panel that ha-form's trailing margin gives the
+    // sections before it, since our panel comes after the base's last element.
+    static get styles() {
+      const baseStyles = super.styles;
+      return [
+        ...(Array.isArray(baseStyles) ? baseStyles : baseStyles ? [baseStyles] : []),
+        css`
+          .defaults-panel {
+            margin-top: 24px;
+          }
+        `,
+      ];
     }
   }
 

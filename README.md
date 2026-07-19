@@ -78,8 +78,8 @@ and then applies your configured defaults; tapping while on turns it off, same a
 the stock card.
 
 You can also add this card via the UI card picker — the visual editor is the same
-one used by the stock Tile card, with an extra "Defaults applied on turn-on"
-section for climate entities.
+one used by the stock Tile card, with an extra "Default values" section for
+climate entities.
 
 ### Limitations
 
