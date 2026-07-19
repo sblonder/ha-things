@@ -90,11 +90,33 @@ function defineCard(): void {
         domain === "climate" && wasOff && actionCfg?.action === "toggle";
 
       // Unmodified stock behavior: turns the entity on (climate.turn_on) with whatever
-      // mode/temperature/fan the integration defaults to.
+      // mode/temperature/fan the integration defaults to. Note this call is
+      // fire-and-forget in the stock implementation (it doesn't return/await the
+      // underlying service call), so awaiting it here does NOT mean the device has
+      // actually finished turning on.
       await super._handleIconAction(ev);
 
       if (willToggleOn && entityId) {
+        // Some integrations (especially IR/cloud-controlled ACs) take real time to
+        // process turn_on before they'll accept further changes. Wait for the state
+        // to actually leave "off" (bounded, so we don't hang forever if it never
+        // does) before sending our defaults, instead of racing them against turn_on.
+        await this._waitUntilNotOff(entityId);
         await this._applyClimateDefaults(entityId);
+      }
+    }
+
+    private async _waitUntilNotOff(
+      entityId: string,
+      timeoutMs = 4000,
+      pollMs = 150
+    ): Promise<void> {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        if (this.hass?.states[entityId]?.state !== "off") {
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, pollMs));
       }
     }
 

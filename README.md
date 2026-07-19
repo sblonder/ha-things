@@ -89,12 +89,13 @@ section for climate entities.
   visual/behavioral parity with the stock card, but ties the card to HA's current
   internal method names. A future frontend refactor could break it; if that
   happens you'll see a clear console error rather than a silent failure.
-- After turning the entity on, the configured defaults are applied with sequential,
-  awaited service calls (`set_hvac_mode`/`set_temperature` then `set_fan_mode`) and
-  no artificial delay. This is correct for the vast majority of climate
-  integrations; if yours needs a brief settle time after `turn_on` before it will
-  accept further changes, you may occasionally see the first follow-up call
-  ignored.
+- After turning the entity on, the card waits for the entity's state to actually
+  leave `off` (polling, capped at 4 seconds) before applying the configured
+  defaults, since `climate.turn_on` can take real time on IR/cloud-controlled
+  devices and firing the follow-up calls too early can get overwritten by the
+  device's own power-on default. If your device takes longer than 4 seconds to
+  report as on, the defaults are still applied afterward, but may race with a
+  slow-to-settle device.
 
 ---
 
