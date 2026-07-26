@@ -1,4 +1,6 @@
+import type { HassEntity } from "home-assistant-js-websocket";
 import type { HomeAssistant, LovelaceCardEditor } from "custom-card-helpers";
+import { forwardHaptic } from "custom-card-helpers";
 import { ensureEditorRegistered } from "./climate-defaults-tile-card-editor";
 import {
   BASE_CARD_TAG,
@@ -7,11 +9,17 @@ import {
   type ClimateDefaultsTileCardConfig,
 } from "./types";
 
-interface ClimateDefaults {
+interface ClimateTargets {
   hvacMode?: string;
   temperature?: number;
   fanMode?: string;
 }
+
+// Used when the user hasn't configured a target HVAC mode: we still need some mode
+// to command the device into directly (see _handleIconAction), so we pick the first
+// of these the entity actually supports rather than falling through to turn_on's
+// undefined last-used mode.
+const FALLBACK_HVAC_MODES = ["heat_cool", "cool"] as const;
 
 type IconAction = "tap" | "hold" | "double_tap";
 
@@ -43,7 +51,7 @@ function defineCard(): void {
   const BaseTileCard = getBaseTileCardClass();
 
   class ClimateDefaultsTileCard extends BaseTileCard {
-    private _climateDefaults: ClimateDefaults = {};
+    private _climateTargets: ClimateTargets = {};
 
     setConfig(config: ClimateDefaultsTileCardConfig): void {
       const domain = config?.entity?.split(".")[0];
@@ -51,17 +59,17 @@ function defineCard(): void {
 
       // climate isn't in HA's DOMAINS_TOGGLE, so the stock card would default the icon's
       // tap action to "none" for climate entities. Inject "toggle" ourselves (unless the
-      // user already set one) so the turn-on/defaults flow works without extra YAML.
+      // user already set one) so the turn-on/target flow works without extra YAML.
       if (domain === "climate" && config?.icon_tap_action === undefined) {
         effectiveConfig = { ...config, icon_tap_action: { action: "toggle" } };
       }
 
       super.setConfig(effectiveConfig);
 
-      this._climateDefaults = {
-        hvacMode: config.default_hvac_mode,
-        temperature: config.default_temperature,
-        fanMode: config.default_fan_mode,
+      this._climateTargets = {
+        hvacMode: config.target_hvac_mode,
+        temperature: config.target_temperature,
+        fanMode: config.target_fan_mode,
       };
     }
 
@@ -89,21 +97,51 @@ function defineCard(): void {
       const willToggleOn =
         domain === "climate" && wasOff && actionCfg?.action === "toggle";
 
-      // Unmodified stock behavior: turns the entity on (climate.turn_on) with whatever
-      // mode/temperature/fan the integration defaults to. Note this call is
-      // fire-and-forget in the stock implementation (it doesn't return/await the
-      // underlying service call), so awaiting it here does NOT mean the device has
-      // actually finished turning on.
+      if (willToggleOn && entityId && this.hass) {
+        const targetHvacMode = this._resolveTargetHvacMode(stateObj);
+        if (targetHvacMode !== undefined) {
+          // Command the device straight to its target state ourselves instead of
+          // going through the stock toggle. climate.turn_on resumes whatever hvac
+          // mode the device last used (e.g. heat), and briefly applying that
+          // before switching to our target (e.g. cool) is a real, harmful
+          // transition on some integrations. Skipping turn_on avoids it entirely.
+          // We bypass super._handleIconAction() to do this, so fire the same tap
+          // haptic it would have given the user for feedback.
+          forwardHaptic("light");
+          await this._commandClimateTarget(entityId, targetHvacMode);
+          return;
+        }
+        // No configured target hvac mode, and the entity doesn't support either
+        // fallback mode -- there's no safe mode to command directly, so fall
+        // through to the stock toggle below and still apply the configured
+        // temperature/fan_mode afterward.
+      }
+
+      // Unmodified stock behavior: turns the entity on/off with whatever mode the
+      // integration defaults to. Note this call is fire-and-forget in the stock
+      // implementation (it doesn't return/await the underlying service call), so
+      // awaiting it here does NOT mean the device has actually finished turning on.
       await super._handleIconAction(ev);
 
       if (willToggleOn && entityId) {
         // Some integrations (especially IR/cloud-controlled ACs) take real time to
         // process turn_on before they'll accept further changes. Wait for the state
         // to actually leave "off" (bounded, so we don't hang forever if it never
-        // does) before sending our defaults, instead of racing them against turn_on.
+        // does) before sending temperature/fan_mode, instead of racing them
+        // against turn_on.
         await this._waitUntilNotOff(entityId);
-        await this._applyClimateDefaults(entityId);
+        await this._applyClimateTemperatureAndFan(entityId);
       }
+    }
+
+    private _resolveTargetHvacMode(
+      stateObj: HassEntity | undefined
+    ): string | undefined {
+      if (this._climateTargets.hvacMode !== undefined) {
+        return this._climateTargets.hvacMode;
+      }
+      const supported: string[] = stateObj?.attributes.hvac_modes ?? [];
+      return FALLBACK_HVAC_MODES.find((mode) => supported.includes(mode));
     }
 
     private async _waitUntilNotOff(
@@ -120,41 +158,28 @@ function defineCard(): void {
       }
     }
 
-    private async _applyClimateDefaults(entityId: string): Promise<void> {
-      const { hvacMode, temperature, fanMode } = this._climateDefaults;
-      if (
-        hvacMode === undefined &&
-        temperature === undefined &&
-        fanMode === undefined
-      ) {
-        return;
-      }
+    // Drives the device to its exact target state via dedicated service calls
+    // (rather than turn_on) in the order the user actually cares about: hvac mode
+    // first (that's what "turns it on" correctly), then temperature, then fan mode.
+    private async _commandClimateTarget(
+      entityId: string,
+      hvacMode: string
+    ): Promise<void> {
       if (!this.hass) {
         return;
       }
+      const { temperature, fanMode } = this._climateTargets;
 
       try {
-        if (hvacMode !== undefined && temperature !== undefined) {
-          // climate.set_temperature accepts an optional hvac_mode, so a single call
-          // covers both instead of two separate service round-trips.
+        await this.hass.callService("climate", "set_hvac_mode", {
+          entity_id: entityId,
+          hvac_mode: hvacMode,
+        });
+        if (temperature !== undefined) {
           await this.hass.callService("climate", "set_temperature", {
             entity_id: entityId,
-            hvac_mode: hvacMode,
             temperature,
           });
-        } else {
-          if (hvacMode !== undefined) {
-            await this.hass.callService("climate", "set_hvac_mode", {
-              entity_id: entityId,
-              hvac_mode: hvacMode,
-            });
-          }
-          if (temperature !== undefined) {
-            await this.hass.callService("climate", "set_temperature", {
-              entity_id: entityId,
-              temperature,
-            });
-          }
         }
         if (fanMode !== undefined) {
           await this.hass.callService("climate", "set_fan_mode", {
@@ -164,7 +189,40 @@ function defineCard(): void {
         }
       } catch (err) {
         console.warn(
-          `[${CARD_TAG}] Failed applying climate defaults for ${entityId}`,
+          `[${CARD_TAG}] Failed commanding climate target for ${entityId}`,
+          err
+        );
+      }
+    }
+
+    // Fallback path used only when no target hvac mode could be resolved (see
+    // _resolveTargetHvacMode): the stock toggle already turned the entity on by
+    // the time this runs, so just layer temperature/fan_mode on top if configured.
+    private async _applyClimateTemperatureAndFan(entityId: string): Promise<void> {
+      const { temperature, fanMode } = this._climateTargets;
+      if (temperature === undefined && fanMode === undefined) {
+        return;
+      }
+      if (!this.hass) {
+        return;
+      }
+
+      try {
+        if (temperature !== undefined) {
+          await this.hass.callService("climate", "set_temperature", {
+            entity_id: entityId,
+            temperature,
+          });
+        }
+        if (fanMode !== undefined) {
+          await this.hass.callService("climate", "set_fan_mode", {
+            entity_id: entityId,
+            fan_mode: fanMode,
+          });
+        }
+      } catch (err) {
+        console.warn(
+          `[${CARD_TAG}] Failed applying temperature/fan mode for ${entityId}`,
           err
         );
       }

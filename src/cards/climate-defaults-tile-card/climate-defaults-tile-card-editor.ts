@@ -9,15 +9,15 @@ import {
 } from "./types";
 
 interface CustomFieldValues {
-  default_hvac_mode?: string;
-  default_temperature?: number;
-  default_fan_mode?: string;
+  target_hvac_mode?: string;
+  target_temperature?: number;
+  target_fan_mode?: string;
 }
 
 const CUSTOM_FIELD_LABELS: Record<string, string> = {
-  default_hvac_mode: "Default HVAC mode",
-  default_temperature: "Default temperature",
-  default_fan_mode: "Default fan mode",
+  target_hvac_mode: "Target HVAC mode",
+  target_temperature: "Target temperature",
+  target_fan_mode: "Target fan mode",
 };
 
 interface HuiTileCardEditorInstance extends HTMLElement {
@@ -54,15 +54,15 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
 
     setConfig(config: ClimateDefaultsTileCardConfig): void {
       const {
-        default_hvac_mode,
-        default_temperature,
-        default_fan_mode,
+        target_hvac_mode,
+        target_temperature,
+        target_fan_mode,
         ...rest
       } = config;
       this._customValues = {
-        default_hvac_mode,
-        default_temperature,
-        default_fan_mode,
+        target_hvac_mode,
+        target_temperature,
+        target_fan_mode,
       };
       super.setConfig(rest);
     }
@@ -125,17 +125,17 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
 
       const schema = [
         {
-          name: "default_hvac_mode",
+          name: "target_hvac_mode",
           selector: { select: { options: hvacModes, mode: "dropdown" } },
         },
         {
-          name: "default_temperature",
+          name: "target_temperature",
           selector: {
             number: { min: minTemp, max: maxTemp, step, mode: "box" },
           },
         },
         {
-          name: "default_fan_mode",
+          name: "target_fan_mode",
           selector: { select: { options: fanModes, mode: "dropdown" } },
         },
       ];
@@ -144,7 +144,7 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
         ${base}
         <ha-expansion-panel class="defaults-panel" outlined>
           <ha-svg-icon slot="leading-icon" .path=${mdiTuneVariant}></ha-svg-icon>
-          <h3 slot="header">Default values</h3>
+          <h3 slot="header">Target values</h3>
           <div class="content">
             <ha-form
               .hass=${this.hass}
@@ -153,6 +153,13 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
               .computeLabel=${this._computeLabel}
               @value-changed=${this._customFormValueChanged}
             ></ha-form>
+            <p class="helper">
+              Tapping the icon while off commands the entity straight to this HVAC
+              mode (skipping the stock turn-on), then this temperature and fan
+              mode. If no target HVAC mode is set, the card falls back to
+              "heat_cool" or "cool" (whichever the entity supports), or to the
+              stock toggle if neither is supported.
+            </p>
           </div>
         </ha-expansion-panel>
       `;
@@ -169,6 +176,11 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
         css`
           .defaults-panel {
             margin-top: 24px;
+          }
+          .helper {
+            margin: 8px 0 0;
+            color: var(--secondary-text-color);
+            font-size: 0.875rem;
           }
         `,
       ];

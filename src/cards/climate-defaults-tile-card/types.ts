@@ -21,15 +21,15 @@ export interface TileCardConfigBase extends LovelaceCardConfig {
 }
 
 export interface ClimateDefaultsTileCardConfig extends TileCardConfigBase {
-  default_hvac_mode?: string;
-  default_temperature?: number;
-  default_fan_mode?: string;
+  target_hvac_mode?: string;
+  target_temperature?: number;
+  target_fan_mode?: string;
 }
 
 export const CUSTOM_CONFIG_KEYS = [
-  "default_hvac_mode",
-  "default_temperature",
-  "default_fan_mode",
+  "target_hvac_mode",
+  "target_temperature",
+  "target_fan_mode",
 ] as const;
 
 export type CustomConfigKey = (typeof CUSTOM_CONFIG_KEYS)[number];

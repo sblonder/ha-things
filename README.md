@@ -6,8 +6,8 @@ distributed as a single HACS resource (`ha-things.js`).
 ## Elements
 
 - [**Climate Defaults Tile Card**](#climate-defaults-tile-card) — a Tile card for
-  climate entities that applies a configured default hvac mode/temperature/fan
-  mode automatically when the entity is turned on.
+  climate entities that commands a configured target hvac mode/temperature/fan
+  mode directly when the entity is turned on.
 
 More elements can be added over time; see [Repository structure](#repository-structure).
 
@@ -43,8 +43,9 @@ More elements can be added over time; see [Repository structure](#repository-str
 ## Climate Defaults Tile Card
 
 Looks and behaves exactly like the built-in **Tile** card, with one addition: you
-can configure the hvac mode, temperature, and fan mode that should be applied
-automatically the instant the climate entity is switched on from the card.
+can configure the hvac mode, temperature, and fan mode that the card should
+command the climate entity to directly, the instant it's switched on from the
+card.
 
 It works by subclassing HA's own running `hui-tile-card` element at runtime, so
 everything you already know about the stock Tile card (icon, name, state text,
@@ -56,29 +57,37 @@ the same. Nothing about the rendering or styling is reimplemented.
 ```yaml
 type: custom:climate-defaults-tile-card
 entity: climate.living_room
-default_hvac_mode: cool
-default_temperature: 21
-default_fan_mode: auto
+target_hvac_mode: cool
+target_temperature: 21
+target_fan_mode: auto
 ```
 
-| Name                  | Type   | Description                                                    |
-| --------------------- | ------ | ---------------------------------------------------------------|
-| `entity`              | string | **Required.** A `climate.*` entity.                            |
-| `default_hvac_mode`   | string | HVAC mode to set when the entity is turned on from this card.  |
-| `default_temperature` | number | Target temperature to set when the entity is turned on.        |
-| `default_fan_mode`    | string | Fan mode to set when the entity is turned on.                  |
+| Name                  | Type   | Description                                                     |
+| --------------------- | ------ | ----------------------------------------------------------------|
+| `entity`              | string | **Required.** A `climate.*` entity.                             |
+| `target_hvac_mode`    | string | HVAC mode to command directly when the entity is turned on.     |
+| `target_temperature`  | number | Target temperature to command after the HVAC mode.              |
+| `target_fan_mode`     | string | Fan mode to command after the temperature.                      |
 
 All other [Tile card options](https://www.home-assistant.io/dashboards/tile/) are
 supported unchanged (`name`, `icon`, `color`, `features`, `tap_action`, etc.).
 
 The card's icon defaults to a toggle action for climate entities (the stock Tile
 card doesn't offer this, since `climate` isn't turned on/off as simply as a
-switch or light). Tapping the icon while the entity is off calls `climate.turn_on`
-and then applies your configured defaults; tapping while on turns it off, same as
-the stock card.
+switch or light). Tapping the icon while the entity is off does **not** call
+`climate.turn_on` — instead it commands `climate.set_hvac_mode` straight to your
+configured `target_hvac_mode`, then `climate.set_temperature` and
+`climate.set_fan_mode` if configured. This is deliberate: `climate.turn_on`
+resumes whatever hvac mode the device last used, and briefly passing through
+that mode (e.g. heat) before switching to your target (e.g. cool) is a real,
+harmful transition on some integrations. If `target_hvac_mode` isn't configured,
+the card falls back to `heat_cool` or `cool` (whichever the entity supports), and
+only if neither is supported does it fall back to the stock toggle (`turn_on`),
+still applying `target_temperature`/`target_fan_mode` afterward if set. Tapping
+while on turns it off, same as the stock card.
 
 You can also add this card via the UI card picker — the visual editor is the same
-one used by the stock Tile card, with an extra "Default values" section for
+one used by the stock Tile card, with an extra "Target values" section for
 climate entities.
 
 ### Limitations
@@ -89,13 +98,19 @@ climate entities.
   visual/behavioral parity with the stock card, but ties the card to HA's current
   internal method names. A future frontend refactor could break it; if that
   happens you'll see a clear console error rather than a silent failure.
-- After turning the entity on, the card waits for the entity's state to actually
-  leave `off` (polling, capped at 4 seconds) before applying the configured
-  defaults, since `climate.turn_on` can take real time on IR/cloud-controlled
-  devices and firing the follow-up calls too early can get overwritten by the
-  device's own power-on default. If your device takes longer than 4 seconds to
-  report as on, the defaults are still applied afterward, but may race with a
-  slow-to-settle device.
+- The direct-command path (used whenever a target hvac mode is resolved) fires
+  `set_hvac_mode` → `set_temperature` → `set_fan_mode` back-to-back without
+  waiting for the entity's state to update between calls. This is what avoids
+  racing `climate.turn_on`, but on integrations that reject a service call while
+  a previous one is still being processed, back-to-back calls could be dropped.
+- Only in the rare case where no target hvac mode could be resolved (none
+  configured, and the entity supports neither `heat_cool` nor `cool`) does the
+  card fall back to the stock toggle. In that fallback path, it waits for the
+  entity's state to actually leave `off` (polling, capped at 4 seconds) before
+  applying `target_temperature`/`target_fan_mode`, since `climate.turn_on` can
+  take real time on IR/cloud-controlled devices. If your device takes longer
+  than 4 seconds to report as on, those values are still applied afterward, but
+  may race with a slow-to-settle device.
 
 ---
 
