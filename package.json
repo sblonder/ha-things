@@ -1,6 +1,6 @@
 {
   "name": "ha-things",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "A collection of custom Home Assistant Lovelace elements, bundled as a single HACS resource (ha-things.js).",
   "scripts": {

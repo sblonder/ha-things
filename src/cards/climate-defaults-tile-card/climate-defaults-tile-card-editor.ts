@@ -1,7 +1,7 @@
 import { css, html } from "lit";
 import { state } from "lit/decorators.js";
 import { mdiTuneVariant } from "@mdi/js";
-import { fireEvent, type HomeAssistant } from "custom-card-helpers";
+import type { HomeAssistant } from "custom-card-helpers";
 import {
   BASE_EDITOR_TAG,
   EDITOR_TAG,
@@ -77,28 +77,38 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
       super.setConfig(rest);
     }
 
+    private _mergeAndTrack(config: Record<string, unknown> | undefined): ClimateDefaultsTileCardConfig {
+      const merged: Record<string, unknown> = {
+        ...config,
+        ...this._customValues,
+      };
+      Object.keys(merged).forEach((key) => {
+        if (merged[key] === undefined) {
+          delete merged[key];
+        }
+      });
+      this._lastConfig = merged as ClimateDefaultsTileCardConfig;
+      return this._lastConfig;
+    }
+
     // The base editor's own stock-field handlers fire "config-changed" events built
     // from their own internal state, which never contains our 3 custom keys (we
     // strip them before delegating to super.setConfig above). Intercepting
     // dispatchEvent is the one place that catches every outgoing config-changed,
     // regardless of which internal handler fired it, so editing a stock field never
     // silently drops ours.
+    //
+    // Note: these events are frequently built with the fireEvent() helper (both
+    // ours from custom-card-helpers and HA's own internal copy), which constructs a
+    // plain `new Event(...)` and bolts `.detail` on as a regular property rather
+    // than using `new CustomEvent(...)`. `event instanceof CustomEvent` is false for
+    // those, so we deliberately don't gate on it here -- only on the event type and
+    // the presence of `.detail.config`.
     dispatchEvent(event: Event): boolean {
-      if (
-        event instanceof CustomEvent &&
-        event.type === "config-changed" &&
-        event.detail?.config
-      ) {
-        const merged: Record<string, unknown> = {
-          ...event.detail.config,
-          ...this._customValues,
-        };
-        Object.keys(merged).forEach((key) => {
-          if (merged[key] === undefined) {
-            delete merged[key];
-          }
-        });
-        this._lastConfig = merged as ClimateDefaultsTileCardConfig;
+      const detail = (event as { detail?: { config?: Record<string, unknown> } })
+        .detail;
+      if (event.type === "config-changed" && detail?.config) {
+        const merged = this._mergeAndTrack(detail.config);
         event = new CustomEvent("config-changed", {
           detail: { config: merged },
           bubbles: event.bubbles,
@@ -114,19 +124,21 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
     private _customFormValueChanged(ev: CustomEvent): void {
       ev.stopPropagation();
       this._customValues = ev.detail.value;
-      const merged: Record<string, unknown> = {
-        ...this._lastConfig,
-        ...this._customValues,
-      };
-      Object.keys(merged).forEach((key) => {
-        if (merged[key] === undefined) {
-          delete merged[key];
-        }
-      });
-      this._lastConfig = merged as ClimateDefaultsTileCardConfig;
-      fireEvent(this, "config-changed" as any, {
-        config: merged,
-      });
+      const merged = this._mergeAndTrack(this._lastConfig);
+      // Dispatch a genuine CustomEvent directly via super (bypassing our own
+      // dispatchEvent override, since we've already merged everything it would)
+      // rather than going through the fireEvent() helper: fireEvent's events
+      // aren't real CustomEvent instances (see the note on dispatchEvent above),
+      // so building one ourselves here is the more defensive choice for the
+      // event this component owns end-to-end, in case anything upstream does
+      // care about the distinction.
+      super.dispatchEvent(
+        new CustomEvent("config-changed", {
+          detail: { config: merged },
+          bubbles: true,
+          composed: true,
+        })
+      );
     }
 
     render() {
