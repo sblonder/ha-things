@@ -52,6 +52,15 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
   class ClimateDefaultsTileCardEditor extends BaseEditorCtor {
     @state() private _customValues: CustomFieldValues = {};
 
+    // Our own record of the full config (stock fields + our 3 custom ones), kept in
+    // sync on every setConfig and every outgoing config-changed. We rely on this
+    // instead of reading the base editor's own `_config` when building our events:
+    // that field is internal to the base class (never part of the public
+    // LovelaceCardEditor contract), so trusting its name/timing is fragile. Tracking
+    // our own copy means our custom fields can never silently fail to round-trip
+    // because of a bad assumption about the base's internals.
+    private _lastConfig: ClimateDefaultsTileCardConfig | undefined;
+
     setConfig(config: ClimateDefaultsTileCardConfig): void {
       const {
         target_hvac_mode,
@@ -64,14 +73,16 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
         target_temperature,
         target_fan_mode,
       };
+      this._lastConfig = config;
       super.setConfig(rest);
     }
 
     // The base editor's own stock-field handlers fire "config-changed" events built
-    // from its own private _config, which never contains our 3 custom keys (we strip
-    // them before delegating to super.setConfig above). Intercepting dispatchEvent is
-    // the one place that catches every outgoing config-changed, regardless of which
-    // internal handler fired it, so editing a stock field never silently drops ours.
+    // from their own internal state, which never contains our 3 custom keys (we
+    // strip them before delegating to super.setConfig above). Intercepting
+    // dispatchEvent is the one place that catches every outgoing config-changed,
+    // regardless of which internal handler fired it, so editing a stock field never
+    // silently drops ours.
     dispatchEvent(event: Event): boolean {
       if (
         event instanceof CustomEvent &&
@@ -87,6 +98,7 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
             delete merged[key];
           }
         });
+        this._lastConfig = merged as ClimateDefaultsTileCardConfig;
         event = new CustomEvent("config-changed", {
           detail: { config: merged },
           bubbles: event.bubbles,
@@ -102,8 +114,18 @@ function buildEditorClass(): HuiTileCardEditorConstructor {
     private _customFormValueChanged(ev: CustomEvent): void {
       ev.stopPropagation();
       this._customValues = ev.detail.value;
+      const merged: Record<string, unknown> = {
+        ...this._lastConfig,
+        ...this._customValues,
+      };
+      Object.keys(merged).forEach((key) => {
+        if (merged[key] === undefined) {
+          delete merged[key];
+        }
+      });
+      this._lastConfig = merged as ClimateDefaultsTileCardConfig;
       fireEvent(this, "config-changed" as any, {
-        config: this._config,
+        config: merged,
       });
     }
 
