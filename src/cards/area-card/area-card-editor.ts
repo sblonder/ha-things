@@ -48,7 +48,9 @@ export class AreaCardEditor extends LitElement implements LovelaceCardEditor {
   @state() private _config?: AreaCardConfig;
 
   setConfig(config: AreaCardConfig): void {
-    this._config = config;
+    // background defaults to on; show that in the form even before the
+    // user has ever touched the toggle.
+    this._config = { background: true, ...config };
   }
 
   private _computeLabel = (schema: { name: string }): string =>

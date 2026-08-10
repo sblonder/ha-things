@@ -18,10 +18,10 @@ export const styles = css`
 
   .background {
     position: absolute;
-    top: -10%;
-    right: -10%;
-    width: 65%;
-    height: 65%;
+    top: -8px;
+    right: -8px;
+    width: 80px;
+    height: 80px;
     --mdc-icon-size: 100%;
     color: var(--secondary-text-color);
     opacity: 0.12;
@@ -61,11 +61,11 @@ export const styles = css`
     align-items: center;
     gap: 6px;
     font-size: 1rem;
-    color: var(--secondary-text-color);
+    color: var(--ha-color-neutral-50, var(--secondary-text-color));
   }
 
   .badge ha-icon {
-    --mdc-icon-size: 20px;
+    --mdc-icon-size: 21px;
   }
 
   .badge.problems {
@@ -78,9 +78,7 @@ export const styles = css`
   }
 
   .devices {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
+    display: flex;
     gap: 8px;
     z-index: 1;
   }
@@ -89,8 +87,9 @@ export const styles = css`
     display: flex;
     align-items: center;
     justify-content: center;
-    aspect-ratio: 2 / 1;
-    max-height: 72px;
+    flex: none;
+    width: 48px;
+    height: 48px;
     border: none;
     border-radius: 12px;
     background: rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.05);

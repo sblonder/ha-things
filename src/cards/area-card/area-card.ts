@@ -1,11 +1,13 @@
 import { LitElement, html, nothing, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
+import { styleMap } from "lit/directives/style-map.js";
 import {
   fireEvent,
   forwardHaptic,
   toggleEntity,
   type LovelaceCardEditor,
 } from "custom-card-helpers";
+import type { HassEntity } from "home-assistant-js-websocket";
 import "./area-card-editor";
 import "./problem-dialog";
 import { styles } from "./styles";
@@ -45,6 +47,28 @@ function classEntityIds(
 
 function anyOn(hass: AreaHomeAssistant, entityIds: string[]): boolean {
   return entityIds.some((id) => hass.states[id]?.state === "on");
+}
+
+function availableState(state: HassEntity | undefined): HassEntity | undefined {
+  return state && !["unavailable", "unknown"].includes(state.state) ? state : undefined;
+}
+
+function formatNumeric(value: string): string {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(1) : value;
+}
+
+// Native light color (mirrors room-summary-card's getRgbColor): HA already
+// resolves a light's rgb_color attribute from whatever color mode is active
+// (rgb, color_temp, hs, xy, ...), so reading it directly avoids reimplementing
+// that conversion. Falls back to a warm glow for color-less on lights.
+function deviceBackground(state: HassEntity | undefined, active: boolean): string | undefined {
+  if (!active || !state || state.entity_id.split(".")[0] !== "light") {
+    return undefined;
+  }
+  const rgb = state.attributes.rgb_color;
+  const [r, g, b] = Array.isArray(rgb) && rgb.length === 3 ? rgb : [255, 193, 7];
+  return `rgba(${r}, ${g}, ${b}, 0.25)`;
 }
 
 function activeProblemIds(hass: AreaHomeAssistant, entityIds: string[]): string[] {
@@ -164,12 +188,12 @@ export class AreaCard extends LitElement {
     const area = hass.areas[config.area!];
 
     const tempEntityId = config.temperature_sensor ?? area?.temperature_entity_id ?? undefined;
-    const tempState = tempEntityId ? hass.states[tempEntityId] : undefined;
+    const tempState = availableState(tempEntityId ? hass.states[tempEntityId] : undefined);
 
     const humidEntityId = config.hide_humidity
       ? undefined
       : (config.humidity_sensor ?? area?.humidity_entity_id ?? undefined);
-    const humidState = humidEntityId ? hass.states[humidEntityId] : undefined;
+    const humidState = availableState(humidEntityId ? hass.states[humidEntityId] : undefined);
 
     const presenceIds =
       config.presence_sensors ?? classEntityIds(hass, entityIds, PRESENCE_DEVICE_CLASSES);
@@ -190,13 +214,13 @@ export class AreaCard extends LitElement {
         ${tempState
           ? html`<span class="badge" @click=${() => this._openMoreInfo(tempState.entity_id)}>
               <ha-icon icon="mdi:thermometer"></ha-icon>
-              ${tempState.state}${tempState.attributes.unit_of_measurement ?? ""}
+              ${formatNumeric(tempState.state)}${tempState.attributes.unit_of_measurement ?? ""}
             </span>`
           : nothing}
         ${humidState
           ? html`<span class="badge" @click=${() => this._openMoreInfo(humidState.entity_id)}>
               <ha-icon icon="mdi:water-percent"></ha-icon>
-              ${humidState.state}${humidState.attributes.unit_of_measurement ?? ""}
+              ${formatNumeric(humidState.state)}${humidState.attributes.unit_of_measurement ?? ""}
             </span>`
           : nothing}
         ${present
@@ -236,6 +260,7 @@ export class AreaCard extends LitElement {
             <button
               class="device"
               ?active=${active}
+              style=${styleMap({ background: deviceBackground(state, active) })}
               @pointerdown=${() => this._onDevicePointerDown(entityId)}
               @pointerup=${() => this._onDevicePointerUp(entityId)}
               @pointercancel=${this._onDevicePointerCancel}
