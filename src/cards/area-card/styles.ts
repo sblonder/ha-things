@@ -20,8 +20,6 @@ export const styles = css`
     position: absolute;
     top: -8px;
     right: -8px;
-    width: 80px;
-    height: 80px;
     --mdc-icon-size: 100%;
     color: var(--secondary-text-color);
     opacity: 0.12;
@@ -79,6 +77,7 @@ export const styles = css`
 
   .devices {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     z-index: 1;
   }
@@ -88,8 +87,8 @@ export const styles = css`
     align-items: center;
     justify-content: center;
     flex: none;
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     border: none;
     border-radius: 12px;
     background: rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.05);
@@ -105,6 +104,6 @@ export const styles = css`
   }
 
   .device state-badge {
-    --mdc-icon-size: 24px;
+    --mdc-icon-size: 22px;
   }
 `;

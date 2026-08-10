@@ -13,7 +13,7 @@ import "./problem-dialog";
 import { styles } from "./styles";
 import {
   CARD_TAG,
-  COMPACT_DEVICES,
+  DEFAULT_BACKGROUND_ICON_SIZE,
   EDITOR_TAG,
   HOLD_MS,
   MAX_DEVICES,
@@ -90,31 +90,13 @@ export class AreaCard extends LitElement {
   // Non-empty while the problem dialog is open; drives whether it's rendered.
   @state() private _problemEntityIds: string[] = [];
 
-  // Whether the card's own rendered box is closer to the 3-wide than the
-  // 6-wide layout, derived from its aspect ratio (rows are fixed at 3 for
-  // both, so width alone doubles between the two designed sizes).
-  @state() private _compact = false;
-
-  private _resizeObserver?: ResizeObserver;
   private _holdTimer?: ReturnType<typeof setTimeout>;
   private _held = false;
 
   static styles = styles;
 
-  connectedCallback(): void {
-    super.connectedCallback();
-    this._resizeObserver = new ResizeObserver((entries) => {
-      const { width, height } = entries[0]!.contentRect;
-      if (height > 0) {
-        this._compact = width / height < 1.5;
-      }
-    });
-    this._resizeObserver.observe(this);
-  }
-
   disconnectedCallback(): void {
     super.disconnectedCallback();
-    this._resizeObserver?.disconnect();
     clearTimeout(this._holdTimer);
   }
 
@@ -177,7 +159,12 @@ export class AreaCard extends LitElement {
     if (this._config?.background === false) {
       return nothing;
     }
-    return html`<ha-icon class="background" .icon=${icon}></ha-icon>`;
+    const size = this._config?.background_icon_size ?? DEFAULT_BACKGROUND_ICON_SIZE;
+    return html`<ha-icon
+      class="background"
+      .icon=${icon}
+      style=${styleMap({ width: `${size}px`, height: `${size}px` })}
+    ></ha-icon>`;
   }
 
   private _renderBadges(
@@ -246,8 +233,7 @@ export class AreaCard extends LitElement {
   }
 
   private _renderDevices(hass: AreaHomeAssistant): TemplateResult | typeof nothing {
-    const maxDevices = this._compact ? COMPACT_DEVICES : MAX_DEVICES;
-    const devices = this._config?.devices?.slice(0, maxDevices);
+    const devices = this._config?.devices?.slice(0, MAX_DEVICES);
     if (!devices?.length) {
       return nothing;
     }
@@ -291,7 +277,7 @@ export class AreaCard extends LitElement {
       <ha-card>
         ${this._renderBackground(icon)}
         <div class="header">
-          <ha-icon .icon=${icon}></ha-icon>
+          ${config.hide_icon ? nothing : html`<ha-icon .icon=${icon}></ha-icon>`}
           <span class="name">${name}</span>
         </div>
         ${this._renderBadges(hass, config, entityIds)}

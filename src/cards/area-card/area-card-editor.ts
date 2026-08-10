@@ -1,14 +1,16 @@
 import { LitElement, html, type TemplateResult } from "lit";
 import { state } from "lit/decorators.js";
 import type { HomeAssistant, LovelaceCardEditor } from "custom-card-helpers";
-import { EDITOR_TAG, type AreaCardConfig } from "./types";
+import { DEFAULT_BACKGROUND_ICON_SIZE, EDITOR_TAG, type AreaCardConfig } from "./types";
 
 const SCHEMA = [
   { name: "area", selector: { area: {} } },
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
+  { name: "hide_icon", selector: { boolean: {} } },
   { name: "devices", selector: { entity: { multiple: true } } },
   { name: "background", selector: { boolean: {} } },
+  { name: "background_icon_size", selector: { number: { min: 20, max: 200, mode: "box" } } },
   {
     name: "badges",
     type: "expandable",
@@ -30,8 +32,10 @@ const LABELS: Record<string, string> = {
   area: "Area",
   name: "Name",
   icon: "Icon",
+  hide_icon: "Hide title icon",
   devices: "Devices",
   background: "Show background icon",
+  background_icon_size: "Background icon size (px)",
   temperature_sensor: "Temperature sensor",
   humidity_sensor: "Humidity sensor",
   hide_humidity: "Hide humidity badge",
@@ -48,9 +52,13 @@ export class AreaCardEditor extends LitElement implements LovelaceCardEditor {
   @state() private _config?: AreaCardConfig;
 
   setConfig(config: AreaCardConfig): void {
-    // background defaults to on; show that in the form even before the
-    // user has ever touched the toggle.
-    this._config = { background: true, ...config };
+    // These default on/to a fixed value; show that in the form even before
+    // the user has ever touched them.
+    this._config = {
+      background: true,
+      background_icon_size: DEFAULT_BACKGROUND_ICON_SIZE,
+      ...config,
+    };
   }
 
   private _computeLabel = (schema: { name: string }): string =>

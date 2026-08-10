@@ -134,13 +134,15 @@ devices:
   - media_player.living_room_tv
 ```
 
-| Name         | Type    | Description                                                          |
-| ------------ | ------- | --------------------------------------------------------------------- |
-| `area`       | string  | **Required.** An area id.                                              |
-| `name`       | string  | Overrides the area's name.                                             |
-| `icon`       | string  | Overrides the area's icon.                                             |
-| `devices`    | list    | Entity ids for the bottom row of buttons (up to 4; extras are hidden). |
-| `background` | boolean | Set to `false` to hide the decorative background icon (default `true`).|
+| Name                    | Type    | Description                                                              |
+| ----------------------- | ------- | ------------------------------------------------------------------------- |
+| `area`                  | string  | **Required.** An area id.                                                  |
+| `name`                  | string  | Overrides the area's name.                                                 |
+| `icon`                  | string  | Overrides the area's icon.                                                 |
+| `hide_icon`             | boolean | Set to `true` to hide the title icon next to the name.                     |
+| `devices`               | list    | Entity ids for the bottom row of buttons (up to 4; extras are hidden).     |
+| `background`            | boolean | Set to `false` to hide the decorative background icon (default `true`).    |
+| `background_icon_size`  | number  | Background icon size in pixels (default `80`).                            |
 
 Status badges show automatically when there's something to report, and are
 otherwise hidden:

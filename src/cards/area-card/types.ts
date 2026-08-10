@@ -4,8 +4,10 @@ export interface AreaCardConfig extends LovelaceCardConfig {
   area?: string;
   name?: string;
   icon?: string;
+  hide_icon?: boolean;
   devices?: string[];
   background?: boolean;
+  background_icon_size?: number;
 
   temperature_sensor?: string;
   humidity_sensor?: string;
@@ -59,11 +61,15 @@ export const CARD_TAG = "area-card";
 export const EDITOR_TAG = "area-card-editor";
 export const DIALOG_TAG = "area-card-problem-dialog";
 
-// Bottom device-button slots. AreaCard's ResizeObserver picks 2 or 4 based on
-// the card's own measured aspect ratio (see _updateCompact).
+// Bottom device-button slots. All configured devices up to this count are
+// rendered in a single row that wraps via CSS (see styles.ts) rather than
+// being explicitly capped per layout size — no reliable way to measure the
+// card's own rendered size in Sections view was found.
 export const MAX_DEVICES = 4;
-export const COMPACT_DEVICES = 2;
 
 // Long-press threshold (ms) that distinguishes a toggle tap from a
 // more-info hold on device buttons.
 export const HOLD_MS = 500;
+
+// Default side length (px) of the decorative background icon.
+export const DEFAULT_BACKGROUND_ICON_SIZE = 80;
