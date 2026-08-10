@@ -1,3 +1,7 @@
 node_modules/
 dist/
 *.log
+
+# Temp clone kept only as an implementation reference for area-card; not part
+# of this repository.
+/room-summary-card/

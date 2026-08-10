@@ -8,6 +8,10 @@ distributed as a single HACS resource (`ha-things.js`).
 - [**Climate Defaults Tile Card**](#climate-defaults-tile-card) — a Tile card for
   climate entities that commands a configured target hvac mode/temperature/fan
   mode directly when the entity is turned on.
+- [**Area Card**](#area-card) — a summary card for a Home Assistant area:
+  icon, name, status badges (temperature/humidity/presence/problems), and a
+  row of device buttons. Snaps between a 6-wide and 3-wide layout in
+  Sections dashboards.
 
 More elements can be added over time; see [Repository structure](#repository-structure).
 
@@ -114,6 +118,43 @@ climate entities.
 
 ---
 
+## Area Card
+
+A summary card for a Home Assistant area: icon + name, status badges, and
+up to 4 device buttons. It targets HA's **Sections** dashboards, snapping
+between a 6-wide (4 device buttons) and 3-wide (2 device buttons) layout.
+
+```yaml
+type: custom:area-card
+area: living_room
+devices:
+  - light.living_room
+  - climate.living_room
+  - switch.living_room_fan
+  - media_player.living_room_tv
+```
+
+| Name         | Type    | Description                                                          |
+| ------------ | ------- | --------------------------------------------------------------------- |
+| `area`       | string  | **Required.** An area id.                                              |
+| `name`       | string  | Overrides the area's name.                                             |
+| `icon`       | string  | Overrides the area's icon.                                             |
+| `devices`    | list    | Entity ids for the bottom row of buttons (up to 4; extras are hidden). |
+| `background` | boolean | Set to `false` to hide the decorative background icon (default `true`).|
+
+Status badges show automatically when there's something to report, and are
+otherwise hidden:
+
+- **Temperature / Humidity** — read directly from the area's own
+  temperature/humidity sensor settings (**Settings → Areas → *Area* →
+  Sensors**), not an average across the area's entities.
+- **Presence** — on when any entity in the area with a `motion`,
+  `occupancy`, or `presence` device class is `on`.
+- **Problems** — a count of entities in the area labeled `problem` or with
+  device class `problem`; tapping it opens a dialog listing them.
+
+---
+
 ## Repository structure
 
 ```
@@ -121,9 +162,15 @@ src/
 ├── ha-things.ts                              # entry point — imports every element below;
 │                                               # this is what gets bundled into dist/ha-things.js
 └── cards/
-    └── climate-defaults-tile-card/
-        ├── climate-defaults-tile-card.ts
-        ├── climate-defaults-tile-card-editor.ts
+    ├── climate-defaults-tile-card/
+    │   ├── climate-defaults-tile-card.ts
+    │   ├── climate-defaults-tile-card-editor.ts
+    │   └── types.ts
+    └── area-card/
+        ├── area-card.ts
+        ├── area-card-editor.ts
+        ├── problem-dialog.ts
+        ├── styles.ts
         └── types.ts
 ```
 
