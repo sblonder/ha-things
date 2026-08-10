@@ -14,8 +14,6 @@ export const styles = css`
     padding: 12px;
     display: flex;
     flex-direction: column;
-    container-type: inline-size;
-    container-name: area-card;
   }
 
   .background {
@@ -53,7 +51,7 @@ export const styles = css`
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px 12px;
+    gap: 6px 14px;
     margin-top: 8px;
     z-index: 1;
   }
@@ -61,20 +59,17 @@ export const styles = css`
   .badge {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 0.8rem;
+    gap: 6px;
+    font-size: 1rem;
     color: var(--secondary-text-color);
   }
 
   .badge ha-icon {
-    --mdc-icon-size: 16px;
+    --mdc-icon-size: 20px;
   }
 
   .badge.problems {
     cursor: pointer;
-  }
-
-  .badge.problems[active] {
     color: var(--error-color);
   }
 
@@ -95,22 +90,22 @@ export const styles = css`
     align-items: center;
     justify-content: center;
     aspect-ratio: 2 / 1;
+    max-height: 72px;
     border: none;
     border-radius: 12px;
-    background: var(--secondary-background-color);
-    color: var(--primary-text-color);
-    cursor: pointer;
+    background: rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.05);
     padding: 0;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
-  .device ha-state-icon {
+  .device[active] {
+    background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.15);
+  }
+
+  .device state-badge {
     --mdc-icon-size: 24px;
-  }
-
-  /* Compact (3-wide) layout: keep only the first 2 of up to 4 device slots. */
-  @container area-card (max-width: 340px) {
-    .devices .device:nth-child(n + 3) {
-      display: none;
-    }
   }
 `;

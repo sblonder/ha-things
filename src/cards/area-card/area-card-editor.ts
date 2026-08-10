@@ -9,6 +9,21 @@ const SCHEMA = [
   { name: "icon", selector: { icon: {} } },
   { name: "devices", selector: { entity: { multiple: true } } },
   { name: "background", selector: { boolean: {} } },
+  {
+    name: "badges",
+    type: "expandable",
+    title: "Status badges",
+    schema: [
+      { name: "temperature_sensor", selector: { entity: { domain: "sensor" } } },
+      { name: "humidity_sensor", selector: { entity: { domain: "sensor" } } },
+      { name: "hide_humidity", selector: { boolean: {} } },
+      { name: "presence_sensors", selector: { entity: { multiple: true, domain: "binary_sensor" } } },
+      { name: "door_sensors", selector: { entity: { multiple: true, domain: "binary_sensor" } } },
+      { name: "hide_door", selector: { boolean: {} } },
+      { name: "window_sensors", selector: { entity: { multiple: true, domain: "binary_sensor" } } },
+      { name: "hide_window", selector: { boolean: {} } },
+    ],
+  },
 ] as const;
 
 const LABELS: Record<string, string> = {
@@ -17,6 +32,14 @@ const LABELS: Record<string, string> = {
   icon: "Icon",
   devices: "Devices",
   background: "Show background icon",
+  temperature_sensor: "Temperature sensor",
+  humidity_sensor: "Humidity sensor",
+  hide_humidity: "Hide humidity badge",
+  presence_sensors: "Presence sensors",
+  door_sensors: "Door sensors",
+  hide_door: "Hide door badge",
+  window_sensors: "Window sensors",
+  hide_window: "Hide window badge",
 };
 
 export class AreaCardEditor extends LitElement implements LovelaceCardEditor {

@@ -6,6 +6,18 @@ export interface AreaCardConfig extends LovelaceCardConfig {
   icon?: string;
   devices?: string[];
   background?: boolean;
+
+  temperature_sensor?: string;
+  humidity_sensor?: string;
+  hide_humidity?: boolean;
+
+  presence_sensors?: string[];
+
+  door_sensors?: string[];
+  hide_door?: boolean;
+
+  window_sensors?: string[];
+  hide_window?: boolean;
 }
 
 // custom-card-helpers' HomeAssistant type predates the area/entity/device
@@ -47,7 +59,11 @@ export const CARD_TAG = "area-card";
 export const EDITOR_TAG = "area-card-editor";
 export const DIALOG_TAG = "area-card-problem-dialog";
 
-// Bottom device-button slots. All configured devices up to this count are
-// always rendered; styles.ts hides the 3rd/4th via a container query at
-// narrow (3-wide) widths, so no JS-side layout detection is needed.
+// Bottom device-button slots. AreaCard's ResizeObserver picks 2 or 4 based on
+// the card's own measured aspect ratio (see _updateCompact).
 export const MAX_DEVICES = 4;
+export const COMPACT_DEVICES = 2;
+
+// Long-press threshold (ms) that distinguishes a toggle tap from a
+// more-info hold on device buttons.
+export const HOLD_MS = 500;
