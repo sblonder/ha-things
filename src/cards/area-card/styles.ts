@@ -76,10 +76,14 @@ export const styles = css`
     flex: 1;
   }
 
+  /* Buttons wrap to as many per row as the card's width allows; anything
+     past the second row is clipped (2 x 44px buttons + 8px gap). */
   .devices {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    max-height: 96px;
+    overflow: hidden;
     z-index: 1;
   }
 

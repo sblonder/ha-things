@@ -11,7 +11,7 @@ import type { HassEntity } from "home-assistant-js-websocket";
 import "./area-card-editor";
 import "./problem-dialog";
 import { styles } from "./styles";
-import { badgeEntities, badgeMode, migrateConfig } from "./config";
+import { badgeEntities, badgeHidden, migrateConfig } from "./config";
 import {
   BADGE_DEVICE_CLASSES,
   BINARY_BADGE_ICONS,
@@ -20,7 +20,6 @@ import {
   DEFAULT_BACKGROUND_ICON_SIZE,
   EDITOR_TAG,
   HOLD_MS,
-  MAX_DEVICES,
   NUMERIC_BADGES,
   type AreaCardConfig,
   type AreaHomeAssistant,
@@ -125,8 +124,8 @@ function averageNumeric(
   return { value, unit: readings[0].unit, entityId: readings[0].entityId };
 }
 
-// "area" mode: the area's configured sensor, then its climate entities, then
-// any matching sensor in the area.
+// Selected sensors if any; otherwise the area's configured sensor, then its
+// climate entities, then any matching sensor in the area.
 function numericBadgeValue(
   hass: AreaHomeAssistant,
   config: AreaCardConfig,
@@ -134,12 +133,12 @@ function numericBadgeValue(
   areaEntityIds: string[],
   key: NumericBadgeKey
 ): NumericValue | undefined {
-  const mode = badgeMode(config, key);
-  if (mode === "hide") {
+  if (badgeHidden(config, key)) {
     return undefined;
   }
-  if (mode === "entities") {
-    return averageNumeric(hass, badgeEntities(config, key), key);
+  const selected = badgeEntities(config, key);
+  if (selected.length > 0) {
+    return averageNumeric(hass, selected, key);
   }
   const areaSensor = area?.[AREA_SENSOR[key]];
   return (
@@ -160,16 +159,17 @@ function activeBinaryEntityId(
   areaEntityIds: string[],
   key: BinaryBadgeKey
 ): string | undefined {
-  const mode = badgeMode(config, key);
-  if (mode === "hide") {
+  if (badgeHidden(config, key)) {
     return undefined;
   }
+  const selected = badgeEntities(config, key);
   const ids =
-    mode === "entities"
-      ? badgeEntities(config, key)
+    selected.length > 0
+      ? selected
       : areaEntityIdsOf(hass, areaEntityIds, "binary_sensor", BADGE_DEVICE_CLASSES[key]);
   return ids.find((id) => hass.states[id]?.state === "on");
 }
+
 function availableState(state: HassEntity | undefined): HassEntity | undefined {
   return state && !["unavailable", "unknown"].includes(state.state) ? state : undefined;
 }
@@ -324,10 +324,11 @@ export class AreaCard extends LitElement {
   }
 
   private _renderDevices(hass: AreaHomeAssistant): TemplateResult | typeof nothing {
-    const devices = this._config?.devices?.slice(0, MAX_DEVICES);
+    const devices = this._config?.devices;
     if (!devices?.length) {
       return nothing;
     }
+    const icons = this._config?.device_icons ?? {};
     return html`
       <div class="devices">
         ${devices.map((entityId) => {
@@ -344,7 +345,11 @@ export class AreaCard extends LitElement {
               @pointerleave=${this._onDevicePointerCancel}
               @contextmenu=${(ev: Event) => ev.preventDefault()}
             >
-              <state-badge .stateObj=${state} .stateColor=${true}></state-badge>
+              <state-badge
+                .stateObj=${state}
+                .stateColor=${true}
+                .overrideIcon=${icons[entityId] || undefined}
+              ></state-badge>
             </button>
           `;
         })}

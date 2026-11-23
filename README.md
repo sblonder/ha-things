@@ -120,9 +120,10 @@ climate entities.
 
 ## Area Card
 
-A summary card for a Home Assistant area: icon + name, status badges, and
-up to 4 device buttons. It targets HA's **Sections** dashboards, snapping
-between a 6-wide (4 device buttons) and 3-wide (2 device buttons) layout.
+A summary card for a Home Assistant area: icon + name, status badges, and a
+row of device buttons. It targets HA's **Sections** dashboards. Device buttons
+wrap to as many per row as the card's width allows, up to two rows; anything
+beyond the second row is hidden.
 
 ```yaml
 type: custom:area-card
@@ -132,6 +133,8 @@ devices:
   - climate.living_room
   - switch.living_room_fan
   - media_player.living_room_tv
+device_icons:
+  climate.living_room: mdi:air-conditioner
 ```
 
 | Name                    | Type    | Description                                                              |
@@ -140,51 +143,48 @@ devices:
 | `name`                  | string  | Overrides the area's name.                                                 |
 | `icon`                  | string  | Overrides the area's icon.                                                 |
 | `hide_icon`             | boolean | Set to `true` to hide the title icon next to the name.                     |
-| `devices`               | list    | Entity ids for the bottom row of buttons (up to 4; extras are hidden).     |
+| `devices`               | list    | Entity ids for the device buttons.                                         |
+| `device_icons`          | map     | Icon overrides for device buttons, keyed by entity id.                     |
 | `background`            | boolean | Set to `false` to hide the decorative background icon (default `true`).    |
 | `background_icon_size`  | number  | Background icon size in pixels (default `80`).                            |
 
-Each status badge is configured with a mode, set from the editor's **Status
-badges** section or in YAML:
-
-- `area` (default): derived from the area, as described below.
-- `hide`: never shown.
-- `entities`: uses the sensors listed in `<badge>_entities`.
+Each status badge uses the sensors listed in `<badge>_entities` when set, and
+otherwise falls back to the area default described below. `hide_<badge>: true`
+turns a badge off entirely. All of these are in the editor's **Status badges**
+section.
 
 ```yaml
 type: custom:area-card
-area: living_room
-temperature: entities
-temperature_entities:
-  - sensor.living_room_temperature
-humidity: hide
-door: entities
-door_entities:
-  - binary_sensor.front_door
+area: front_yard
+presence_entities:
+  - binary_sensor.front_yard_person
+hide_motion: true
+hide_humidity: true
 ```
 
-| Badge         | Mode key      | Sensors key            | `area` mode source                                                  |
-| ------------- | ------------- | ---------------------- | ------------------------------------------------------------------- |
-| Temperature   | `temperature` | `temperature_entities` | Area's temperature sensor, else its climate entities, else its `temperature` sensors |
-| Humidity      | `humidity`    | `humidity_entities`    | Area's humidity sensor, else its climate entities, else its `humidity` sensors       |
-| Presence      | `presence`    | `presence_entities`    | `occupancy` / `presence` binary sensors in the area                  |
-| Motion        | `motion`      | `motion_entities`      | `motion` binary sensors in the area                                  |
-| Door          | `door`        | `door_entities`        | `door` / `garage_door` binary sensors in the area                    |
-| Window        | `window`      | `window_entities`      | `window` binary sensors in the area                                  |
+| Badge       | Sensors key            | Hide key           | Area default                                                                          |
+| ----------- | ---------------------- | ------------------ | ------------------------------------------------------------------------------------- |
+| Temperature | `temperature_entities` | `hide_temperature` | Area's temperature sensor, else its climate entities, else its `temperature` sensors  |
+| Humidity    | `humidity_entities`    | `hide_humidity`    | Area's humidity sensor, else its climate entities, else its `humidity` sensors        |
+| Presence    | `presence_entities`    | `hide_presence`    | `occupancy` / `presence` binary sensors in the area                                   |
+| Motion      | `motion_entities`      | `hide_motion`      | `motion` binary sensors in the area                                                   |
+| Door        | `door_entities`        | `hide_door`        | `door` / `garage_door` binary sensors in the area                                     |
+| Window      | `window_entities`      | `hide_window`      | `window` binary sensors in the area                                                   |
 
 The area's own temperature/humidity sensors are set in **Settings → Areas →
 *Area* → Sensors**. If several temperature or humidity readings are found,
 the badge shows their average, as HA's built-in area card does. Climate
 entities contribute their current temperature/humidity. Presence, motion, door
 and window badges show only while one of their sensors is `on`. Hidden and
-diagnostic entities are skipped in `area` mode.
+diagnostic entities are skipped for area defaults. Presence and motion are
+separate badges, so selecting presence sensors doesn't affect the motion badge.
 
 A **Problems** badge counts entities in the area labeled `problem` or with
 device class `problem`. Tapping it opens a dialog listing them.
 
-Older `temperature_sensor`, `humidity_sensor`, `presence_sensors`,
-`door_sensors`, `window_sensors` and `hide_*` options still work and are
-converted to the new format when the card is edited.
+Options from older versions (`temperature_sensor`, `presence_sensors`, ...,
+and the 0.3.5 `<badge>: area | hide | entities` keys) still work and are
+converted to the current format when the card is edited.
 
 ---
 

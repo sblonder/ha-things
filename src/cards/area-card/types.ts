@@ -6,26 +6,26 @@ export interface AreaCardConfig extends LovelaceCardConfig {
   icon?: string;
   hide_icon?: boolean;
   devices?: string[];
+  // Per-device icon overrides, keyed by entity id.
+  device_icons?: Record<string, string>;
   background?: boolean;
   background_icon_size?: number;
 
-  temperature?: BadgeMode;
+  // Each badge uses its `<badge>_entities` when set, otherwise the area
+  // default; `hide_<badge>` turns it off entirely.
   temperature_entities?: string[];
-  humidity?: BadgeMode;
+  hide_temperature?: boolean;
   humidity_entities?: string[];
-  presence?: BadgeMode;
+  hide_humidity?: boolean;
   presence_entities?: string[];
-  motion?: BadgeMode;
+  hide_presence?: boolean;
   motion_entities?: string[];
-  door?: BadgeMode;
+  hide_motion?: boolean;
   door_entities?: string[];
-  window?: BadgeMode;
+  hide_door?: boolean;
   window_entities?: string[];
+  hide_window?: boolean;
 }
-
-// "area": derive from the area (default), "hide": never show,
-// "entities": use the `<badge>_entities` list.
-export type BadgeMode = "area" | "hide" | "entities";
 
 export const BADGE_KEYS = [
   "temperature",
@@ -104,12 +104,6 @@ export interface AreaHomeAssistant extends HomeAssistant {
 export const CARD_TAG = "area-card";
 export const EDITOR_TAG = "area-card-editor";
 export const DIALOG_TAG = "area-card-problem-dialog";
-
-// Bottom device-button slots. All configured devices up to this count are
-// rendered in a single row that wraps via CSS (see styles.ts) rather than
-// being explicitly capped per layout size — no reliable way to measure the
-// card's own rendered size in Sections view was found.
-export const MAX_DEVICES = 4;
 
 // Long-press threshold (ms) that distinguishes a toggle tap from a
 // more-info hold on device buttons.
