@@ -9,18 +9,66 @@ export interface AreaCardConfig extends LovelaceCardConfig {
   background?: boolean;
   background_icon_size?: number;
 
-  temperature_sensor?: string;
-  humidity_sensor?: string;
-  hide_humidity?: boolean;
-
-  presence_sensors?: string[];
-
-  door_sensors?: string[];
-  hide_door?: boolean;
-
-  window_sensors?: string[];
-  hide_window?: boolean;
+  temperature?: BadgeMode;
+  temperature_entities?: string[];
+  humidity?: BadgeMode;
+  humidity_entities?: string[];
+  presence?: BadgeMode;
+  presence_entities?: string[];
+  motion?: BadgeMode;
+  motion_entities?: string[];
+  door?: BadgeMode;
+  door_entities?: string[];
+  window?: BadgeMode;
+  window_entities?: string[];
 }
+
+// "area": derive from the area (default), "hide": never show,
+// "entities": use the `<badge>_entities` list.
+export type BadgeMode = "area" | "hide" | "entities";
+
+export const BADGE_KEYS = [
+  "temperature",
+  "humidity",
+  "presence",
+  "motion",
+  "door",
+  "window",
+] as const;
+
+export type BadgeKey = (typeof BADGE_KEYS)[number];
+
+export const BADGE_LABELS: Record<BadgeKey, string> = {
+  temperature: "Temperature",
+  humidity: "Humidity",
+  presence: "Presence",
+  motion: "Motion",
+  door: "Door",
+  window: "Window",
+};
+
+export const NUMERIC_BADGES = ["temperature", "humidity"] as const;
+export type NumericBadgeKey = (typeof NUMERIC_BADGES)[number];
+
+export const BINARY_BADGES = ["presence", "motion", "door", "window"] as const;
+export type BinaryBadgeKey = (typeof BINARY_BADGES)[number];
+
+// Device classes used to find an area's sensors for "area" mode.
+export const BADGE_DEVICE_CLASSES: Record<BadgeKey, readonly string[]> = {
+  temperature: ["temperature"],
+  humidity: ["humidity"],
+  presence: ["occupancy", "presence"],
+  motion: ["motion"],
+  door: ["door", "garage_door"],
+  window: ["window"],
+};
+
+export const BINARY_BADGE_ICONS: Record<BinaryBadgeKey, string> = {
+  presence: "mdi:home-account",
+  motion: "mdi:motion-sensor",
+  door: "mdi:door-open",
+  window: "mdi:window-open",
+};
 
 // custom-card-helpers' HomeAssistant type predates the area/entity/device
 // registries; the real runtime object always has them, so we type just the
@@ -35,9 +83,11 @@ export interface AreaRegistryEntry {
 
 export interface EntityRegistryEntry {
   entity_id: string;
-  area_id: string | null;
-  device_id: string | null;
+  area_id?: string | null;
+  device_id?: string | null;
   labels: string[];
+  hidden?: boolean;
+  entity_category?: string | null;
 }
 
 export interface DeviceRegistryEntry {
@@ -50,12 +100,6 @@ export interface AreaHomeAssistant extends HomeAssistant {
   entities: Record<string, EntityRegistryEntry>;
   devices: Record<string, DeviceRegistryEntry>;
 }
-
-export const PRESENCE_DEVICE_CLASSES = [
-  "motion",
-  "occupancy",
-  "presence",
-] as const;
 
 export const CARD_TAG = "area-card";
 export const EDITOR_TAG = "area-card-editor";

@@ -11,51 +11,167 @@ import type { HassEntity } from "home-assistant-js-websocket";
 import "./area-card-editor";
 import "./problem-dialog";
 import { styles } from "./styles";
+import { badgeEntities, badgeMode, migrateConfig } from "./config";
 import {
+  BADGE_DEVICE_CLASSES,
+  BINARY_BADGE_ICONS,
+  BINARY_BADGES,
   CARD_TAG,
   DEFAULT_BACKGROUND_ICON_SIZE,
   EDITOR_TAG,
   HOLD_MS,
   MAX_DEVICES,
-  PRESENCE_DEVICE_CLASSES,
+  NUMERIC_BADGES,
   type AreaCardConfig,
   type AreaHomeAssistant,
+  type AreaRegistryEntry,
+  type BinaryBadgeKey,
+  type NumericBadgeKey,
 } from "./types";
 
-// Entities that live in the configured area, either directly or via their device.
+const NUMERIC_BADGE_ICONS: Record<NumericBadgeKey, string> = {
+  temperature: "mdi:thermometer",
+  humidity: "mdi:water-percent",
+};
+
+const CLIMATE_ATTRIBUTES: Record<NumericBadgeKey, string> = {
+  temperature: "current_temperature",
+  humidity: "current_humidity",
+};
+
+const AREA_SENSOR: Record<NumericBadgeKey, "temperature_entity_id" | "humidity_entity_id"> = {
+  temperature: "temperature_entity_id",
+  humidity: "humidity_entity_id",
+};
+
+interface NumericValue {
+  value: number;
+  unit: string;
+  entityId: string;
+}
+
+// Entities that live in the configured area: an entity's own area wins,
+// otherwise it inherits its device's area.
 function entityIdsInArea(hass: AreaHomeAssistant, area: string): string[] {
   return Object.values(hass.entities)
-    .filter(
-      (entity) =>
-        entity.area_id === area ||
-        (entity.device_id !== null &&
-          hass.devices[entity.device_id]?.area_id === area)
-    )
+    .filter((entity) => {
+      const entityArea =
+        entity.area_id ??
+        (entity.device_id ? hass.devices[entity.device_id]?.area_id : undefined);
+      return entityArea === area;
+    })
     .map((entity) => entity.entity_id);
 }
 
-// Entities among `areaEntityIds` whose device_class is one of `deviceClasses`.
-function classEntityIds(
+// Visible, non-diagnostic area entities of `domain`, optionally filtered by
+// device_class.
+function areaEntityIdsOf(
   hass: AreaHomeAssistant,
   areaEntityIds: string[],
-  deviceClasses: readonly string[]
+  domain: string,
+  deviceClasses?: readonly string[]
 ): string[] {
-  return areaEntityIds.filter((id) =>
-    deviceClasses.includes(hass.states[id]?.attributes.device_class as string)
+  return areaEntityIds.filter((id) => {
+    const entry = hass.entities[id];
+    if (entry?.hidden || entry?.entity_category || id.split(".")[0] !== domain) {
+      return false;
+    }
+    return (
+      !deviceClasses ||
+      deviceClasses.includes(hass.states[id]?.attributes.device_class as string)
+    );
+  });
+}
+
+// Climate entities report the reading as an attribute; sensors as their state.
+function readNumeric(
+  hass: AreaHomeAssistant,
+  entityId: string,
+  key: NumericBadgeKey
+): NumericValue | undefined {
+  const state = availableState(hass.states[entityId]);
+  if (!state) {
+    return undefined;
+  }
+  if (entityId.split(".")[0] === "climate") {
+    const value = Number(state.attributes[CLIMATE_ATTRIBUTES[key]]);
+    const unit =
+      key === "temperature" ? (hass.config?.unit_system?.temperature ?? "") : "%";
+    return state.attributes[CLIMATE_ATTRIBUTES[key]] != null && Number.isFinite(value)
+      ? { value, unit, entityId }
+      : undefined;
+  }
+  const value = Number(state.state);
+  return Number.isFinite(value)
+    ? { value, unit: (state.attributes.unit_of_measurement as string) ?? "", entityId }
+    : undefined;
+}
+
+// Averages the readings that share the first reading's unit, like HA's own
+// area card does for an area's sensors.
+function averageNumeric(
+  hass: AreaHomeAssistant,
+  entityIds: string[],
+  key: NumericBadgeKey
+): NumericValue | undefined {
+  const readings = entityIds
+    .map((id) => readNumeric(hass, id, key))
+    .filter((r): r is NumericValue => !!r);
+  if (readings.length === 0) {
+    return undefined;
+  }
+  const sameUnit = readings.filter((r) => r.unit === readings[0].unit);
+  const value = sameUnit.reduce((sum, r) => sum + r.value, 0) / sameUnit.length;
+  return { value, unit: readings[0].unit, entityId: readings[0].entityId };
+}
+
+// "area" mode: the area's configured sensor, then its climate entities, then
+// any matching sensor in the area.
+function numericBadgeValue(
+  hass: AreaHomeAssistant,
+  config: AreaCardConfig,
+  area: AreaRegistryEntry | undefined,
+  areaEntityIds: string[],
+  key: NumericBadgeKey
+): NumericValue | undefined {
+  const mode = badgeMode(config, key);
+  if (mode === "hide") {
+    return undefined;
+  }
+  if (mode === "entities") {
+    return averageNumeric(hass, badgeEntities(config, key), key);
+  }
+  const areaSensor = area?.[AREA_SENSOR[key]];
+  return (
+    (areaSensor ? averageNumeric(hass, [areaSensor], key) : undefined) ??
+    averageNumeric(hass, areaEntityIdsOf(hass, areaEntityIds, "climate"), key) ??
+    averageNumeric(
+      hass,
+      areaEntityIdsOf(hass, areaEntityIds, "sensor", BADGE_DEVICE_CLASSES[key]),
+      key
+    )
   );
 }
 
-function anyOn(hass: AreaHomeAssistant, entityIds: string[]): boolean {
-  return entityIds.some((id) => hass.states[id]?.state === "on");
+// First entity that's currently on for a presence/motion/door/window badge.
+function activeBinaryEntityId(
+  hass: AreaHomeAssistant,
+  config: AreaCardConfig,
+  areaEntityIds: string[],
+  key: BinaryBadgeKey
+): string | undefined {
+  const mode = badgeMode(config, key);
+  if (mode === "hide") {
+    return undefined;
+  }
+  const ids =
+    mode === "entities"
+      ? badgeEntities(config, key)
+      : areaEntityIdsOf(hass, areaEntityIds, "binary_sensor", BADGE_DEVICE_CLASSES[key]);
+  return ids.find((id) => hass.states[id]?.state === "on");
 }
-
 function availableState(state: HassEntity | undefined): HassEntity | undefined {
   return state && !["unavailable", "unknown"].includes(state.state) ? state : undefined;
-}
-
-function formatNumeric(value: string): string {
-  const n = Number(value);
-  return Number.isFinite(n) ? n.toFixed(1) : value;
 }
 
 // Native light color (mirrors room-summary-card's getRgbColor): HA already
@@ -104,7 +220,7 @@ export class AreaCard extends LitElement {
     if (!config?.area) {
       throw new Error("You need to select an area");
     }
-    this._config = config;
+    this._config = migrateConfig(config);
   }
 
   getCardSize(): number {
@@ -173,52 +289,27 @@ export class AreaCard extends LitElement {
     entityIds: string[]
   ): TemplateResult {
     const area = hass.areas[config.area!];
-
-    const tempEntityId = config.temperature_sensor ?? area?.temperature_entity_id ?? undefined;
-    const tempState = availableState(tempEntityId ? hass.states[tempEntityId] : undefined);
-
-    const humidEntityId = config.hide_humidity
-      ? undefined
-      : (config.humidity_sensor ?? area?.humidity_entity_id ?? undefined);
-    const humidState = availableState(humidEntityId ? hass.states[humidEntityId] : undefined);
-
-    const presenceIds =
-      config.presence_sensors ?? classEntityIds(hass, entityIds, PRESENCE_DEVICE_CLASSES);
-    const doorIds = config.hide_door
-      ? []
-      : (config.door_sensors ?? classEntityIds(hass, entityIds, ["door"]));
-    const windowIds = config.hide_window
-      ? []
-      : (config.window_sensors ?? classEntityIds(hass, entityIds, ["window"]));
-
-    const present = anyOn(hass, presenceIds);
-    const doorOpen = anyOn(hass, doorIds);
-    const windowOpen = anyOn(hass, windowIds);
     const problems = activeProblemIds(hass, entityIds);
 
     return html`
       <div class="badges">
-        ${tempState
-          ? html`<span class="badge" @click=${() => this._openMoreInfo(tempState.entity_id)}>
-              <ha-icon icon="mdi:thermometer"></ha-icon>
-              ${formatNumeric(tempState.state)}${tempState.attributes.unit_of_measurement ?? ""}
-            </span>`
-          : nothing}
-        ${humidState
-          ? html`<span class="badge" @click=${() => this._openMoreInfo(humidState.entity_id)}>
-              <ha-icon icon="mdi:water-percent"></ha-icon>
-              ${formatNumeric(humidState.state)}${humidState.attributes.unit_of_measurement ?? ""}
-            </span>`
-          : nothing}
-        ${present
-          ? html`<span class="badge"><ha-icon icon="mdi:motion-sensor"></ha-icon></span>`
-          : nothing}
-        ${doorOpen
-          ? html`<span class="badge"><ha-icon icon="mdi:door-open"></ha-icon></span>`
-          : nothing}
-        ${windowOpen
-          ? html`<span class="badge"><ha-icon icon="mdi:window-open"></ha-icon></span>`
-          : nothing}
+        ${NUMERIC_BADGES.map((key) => {
+          const reading = numericBadgeValue(hass, config, area, entityIds, key);
+          return reading
+            ? html`<span class="badge" @click=${() => this._openMoreInfo(reading.entityId)}>
+                <ha-icon .icon=${NUMERIC_BADGE_ICONS[key]}></ha-icon>
+                ${reading.value.toFixed(1)}${reading.unit}
+              </span>`
+            : nothing;
+        })}
+        ${BINARY_BADGES.map((key) => {
+          const activeId = activeBinaryEntityId(hass, config, entityIds, key);
+          return activeId
+            ? html`<span class="badge" @click=${() => this._openMoreInfo(activeId)}>
+                <ha-icon .icon=${BINARY_BADGE_ICONS[key]}></ha-icon>
+              </span>`
+            : nothing;
+        })}
         ${problems.length > 0
           ? html`<span
               class="badge problems"

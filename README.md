@@ -144,16 +144,47 @@ devices:
 | `background`            | boolean | Set to `false` to hide the decorative background icon (default `true`).    |
 | `background_icon_size`  | number  | Background icon size in pixels (default `80`).                            |
 
-Status badges show automatically when there's something to report, and are
-otherwise hidden:
+Each status badge is configured with a mode, set from the editor's **Status
+badges** section or in YAML:
 
-- **Temperature / Humidity** — read directly from the area's own
-  temperature/humidity sensor settings (**Settings → Areas → *Area* →
-  Sensors**), not an average across the area's entities.
-- **Presence** — on when any entity in the area with a `motion`,
-  `occupancy`, or `presence` device class is `on`.
-- **Problems** — a count of entities in the area labeled `problem` or with
-  device class `problem`; tapping it opens a dialog listing them.
+- `area` (default): derived from the area, as described below.
+- `hide`: never shown.
+- `entities`: uses the sensors listed in `<badge>_entities`.
+
+```yaml
+type: custom:area-card
+area: living_room
+temperature: entities
+temperature_entities:
+  - sensor.living_room_temperature
+humidity: hide
+door: entities
+door_entities:
+  - binary_sensor.front_door
+```
+
+| Badge         | Mode key      | Sensors key            | `area` mode source                                                  |
+| ------------- | ------------- | ---------------------- | ------------------------------------------------------------------- |
+| Temperature   | `temperature` | `temperature_entities` | Area's temperature sensor, else its climate entities, else its `temperature` sensors |
+| Humidity      | `humidity`    | `humidity_entities`    | Area's humidity sensor, else its climate entities, else its `humidity` sensors       |
+| Presence      | `presence`    | `presence_entities`    | `occupancy` / `presence` binary sensors in the area                  |
+| Motion        | `motion`      | `motion_entities`      | `motion` binary sensors in the area                                  |
+| Door          | `door`        | `door_entities`        | `door` / `garage_door` binary sensors in the area                    |
+| Window        | `window`      | `window_entities`      | `window` binary sensors in the area                                  |
+
+The area's own temperature/humidity sensors are set in **Settings → Areas →
+*Area* → Sensors**. If several temperature or humidity readings are found,
+the badge shows their average, as HA's built-in area card does. Climate
+entities contribute their current temperature/humidity. Presence, motion, door
+and window badges show only while one of their sensors is `on`. Hidden and
+diagnostic entities are skipped in `area` mode.
+
+A **Problems** badge counts entities in the area labeled `problem` or with
+device class `problem`. Tapping it opens a dialog listing them.
+
+Older `temperature_sensor`, `humidity_sensor`, `presence_sensors`,
+`door_sensors`, `window_sensors` and `hide_*` options still work and are
+converted to the new format when the card is edited.
 
 ---
 
@@ -171,6 +202,7 @@ src/
     └── area-card/
         ├── area-card.ts
         ├── area-card-editor.ts
+        ├── config.ts
         ├── problem-dialog.ts
         ├── styles.ts
         └── types.ts

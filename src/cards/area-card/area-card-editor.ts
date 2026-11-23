@@ -1,9 +1,19 @@
 import { LitElement, html, type TemplateResult } from "lit";
 import { state } from "lit/decorators.js";
 import type { HomeAssistant, LovelaceCardEditor } from "custom-card-helpers";
-import { DEFAULT_BACKGROUND_ICON_SIZE, EDITOR_TAG, type AreaCardConfig } from "./types";
+import { badgeMode, migrateConfig } from "./config";
+import {
+  BADGE_DEVICE_CLASSES,
+  BADGE_KEYS,
+  BADGE_LABELS,
+  DEFAULT_BACKGROUND_ICON_SIZE,
+  EDITOR_TAG,
+  NUMERIC_BADGES,
+  type AreaCardConfig,
+  type BadgeKey,
+} from "./types";
 
-const SCHEMA = [
+const BASE_SCHEMA = [
   { name: "area", selector: { area: {} } },
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
@@ -11,22 +21,13 @@ const SCHEMA = [
   { name: "devices", selector: { entity: { multiple: true } } },
   { name: "background", selector: { boolean: {} } },
   { name: "background_icon_size", selector: { number: { min: 20, max: 200, mode: "box" } } },
-  {
-    name: "badges",
-    type: "expandable",
-    title: "Status badges",
-    schema: [
-      { name: "temperature_sensor", selector: { entity: { domain: "sensor" } } },
-      { name: "humidity_sensor", selector: { entity: { domain: "sensor" } } },
-      { name: "hide_humidity", selector: { boolean: {} } },
-      { name: "presence_sensors", selector: { entity: { multiple: true, domain: "binary_sensor" } } },
-      { name: "door_sensors", selector: { entity: { multiple: true, domain: "binary_sensor" } } },
-      { name: "hide_door", selector: { boolean: {} } },
-      { name: "window_sensors", selector: { entity: { multiple: true, domain: "binary_sensor" } } },
-      { name: "hide_window", selector: { boolean: {} } },
-    ],
-  },
-] as const;
+];
+
+const MODE_OPTIONS = [
+  { value: "area", label: "Area default" },
+  { value: "hide", label: "Hide" },
+  { value: "entities", label: "Specific sensors" },
+];
 
 const LABELS: Record<string, string> = {
   area: "Area",
@@ -36,15 +37,38 @@ const LABELS: Record<string, string> = {
   devices: "Devices",
   background: "Show background icon",
   background_icon_size: "Background icon size (px)",
-  temperature_sensor: "Temperature sensor",
-  humidity_sensor: "Humidity sensor",
-  hide_humidity: "Hide humidity badge",
-  presence_sensors: "Presence sensors",
-  door_sensors: "Door sensors",
-  hide_door: "Hide door badge",
-  window_sensors: "Window sensors",
-  hide_window: "Hide window badge",
+  ...Object.fromEntries(
+    BADGE_KEYS.flatMap((key) => [
+      [key, BADGE_LABELS[key]],
+      [`${key}_entities`, `${BADGE_LABELS[key]} sensors`],
+    ])
+  ),
 };
+
+function isNumericBadge(key: BadgeKey): boolean {
+  return (NUMERIC_BADGES as readonly string[]).includes(key);
+}
+
+function entityFilter(key: BadgeKey) {
+  const device_class = [...BADGE_DEVICE_CLASSES[key]];
+  return isNumericBadge(key)
+    ? [{ domain: "sensor", device_class }, { domain: "climate" }]
+    : [{ domain: "binary_sensor", device_class }];
+}
+
+function badgeSchema(config: AreaCardConfig) {
+  return BADGE_KEYS.flatMap((key) => [
+    { name: key, selector: { select: { mode: "dropdown", options: MODE_OPTIONS } } },
+    ...(badgeMode(config, key) === "entities"
+      ? [
+          {
+            name: `${key}_entities`,
+            selector: { entity: { multiple: true, filter: entityFilter(key) } },
+          },
+        ]
+      : []),
+  ]);
+}
 
 export class AreaCardEditor extends LitElement implements LovelaceCardEditor {
   hass?: HomeAssistant;
@@ -52,21 +76,43 @@ export class AreaCardEditor extends LitElement implements LovelaceCardEditor {
   @state() private _config?: AreaCardConfig;
 
   setConfig(config: AreaCardConfig): void {
-    // These default on/to a fixed value; show that in the form even before
-    // the user has ever touched them.
-    this._config = {
-      background: true,
-      background_icon_size: DEFAULT_BACKGROUND_ICON_SIZE,
-      ...config,
-    };
+    this._config = migrateConfig(config);
   }
 
   private _computeLabel = (schema: { name: string }): string =>
     LABELS[schema.name] ?? schema.name;
 
+  // Shows the implicit defaults in the form even before the user has
+  // touched them.
+  private _formData(config: AreaCardConfig): AreaCardConfig {
+    return {
+      background: true,
+      background_icon_size: DEFAULT_BACKGROUND_ICON_SIZE,
+      ...Object.fromEntries(BADGE_KEYS.map((key) => [key, badgeMode(config, key)])),
+      ...config,
+    };
+  }
+
+  // Keeps the saved YAML minimal: "area" is the default mode, and a sensor
+  // list only matters in "entities" mode.
+  private _cleanBadges(config: AreaCardConfig): AreaCardConfig {
+    const cleaned: AreaCardConfig = { ...config };
+    for (const key of BADGE_KEYS) {
+      const entitiesKey = `${key}_entities`;
+      if (!cleaned[key] || cleaned[key] === "area") {
+        delete cleaned[key];
+      }
+      if (cleaned[key] !== "entities" || !cleaned[entitiesKey]?.length) {
+        delete cleaned[entitiesKey];
+      }
+    }
+    return cleaned;
+  }
+
   private _valueChanged(ev: CustomEvent): void {
     ev.stopPropagation();
-    const config = ev.detail.value as AreaCardConfig;
+    const config = this._cleanBadges(ev.detail.value as AreaCardConfig);
+    this._config = config;
     this.dispatchEvent(
       new CustomEvent("config-changed", {
         detail: { config },
@@ -80,11 +126,21 @@ export class AreaCardEditor extends LitElement implements LovelaceCardEditor {
     if (!this.hass || !this._config) {
       return html``;
     }
+    const schema = [
+      ...BASE_SCHEMA,
+      {
+        name: "badges",
+        type: "expandable",
+        flatten: true,
+        title: "Status badges",
+        schema: badgeSchema(this._config),
+      },
+    ];
     return html`
       <ha-form
         .hass=${this.hass}
-        .data=${this._config}
-        .schema=${SCHEMA}
+        .data=${this._formData(this._config)}
+        .schema=${schema}
         .computeLabel=${this._computeLabel}
         @value-changed=${this._valueChanged}
       ></ha-form>

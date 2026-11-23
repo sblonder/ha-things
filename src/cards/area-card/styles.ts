@@ -50,14 +50,15 @@ export const styles = css`
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 14px;
-    margin-top: 8px;
+    margin-top: 5px;
+    line-height: 1;
     z-index: 1;
   }
 
   .badge {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 3px;
     font-size: 1rem;
     color: var(--ha-color-neutral-50, var(--secondary-text-color));
   }
