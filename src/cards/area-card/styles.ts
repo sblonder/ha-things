@@ -106,4 +106,10 @@ export const styles = css`
   .device state-badge {
     --mdc-icon-size: 22px;
   }
+
+  .device:not([active]) state-badge {
+    --state-icon-color: var(--state-inactive-color, var(--disabled-text-color));
+    --paper-item-icon-color: var(--state-inactive-color, var(--disabled-text-color));
+    color: var(--state-inactive-color, var(--disabled-text-color));
+  }
 `;
