@@ -76,11 +76,12 @@ export const styles = css`
     flex: 1;
   }
 
-  /* Buttons wrap to as many per row as the card's width allows; anything
-     past the second row is clipped (2 x 44px buttons + 8px gap). */
+  /* Rows fill from the bottom up: the first row is the bottom one and is
+     always full, and each row is left-aligned. Anything past the second row
+     is clipped (2 x 44px buttons + 8px gap). */
   .devices {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: wrap-reverse;
     gap: 8px;
     max-height: 96px;
     overflow: hidden;
